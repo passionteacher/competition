@@ -434,10 +434,10 @@
                 };
                 
                 recognition.onerror = (event) => {
-                    console.error('[DEBUG] 음성 인식 오류:', event.error);
                     isRecognizing = false;
                     
                     if (event.error === 'not-allowed') {
+                        console.error('[DEBUG] 마이크 권한 오류:', event.error);
                         isPermissionDenied = true;
                         if (!hasShownPermissionError) {
                             const instructions = [
@@ -449,9 +449,14 @@
                             hasShownPermissionError = true;
                         }
                         statusBar.classList.add('hidden');
-                        recognition.stop(); // 오류 발생 시 인식 중단
-                    } else if (event.error !== 'no-speech') {
-                         showErrorModal(`음성 인식 오류가 발생했습니다: ${event.error}`);
+                        recognition.stop();
+                    } else if (event.error === 'no-speech') {
+                         // 음성이 감지되지 않았을 때는 오류로 처리하지 않고 경고 메시지를 출력
+                        console.warn('[DEBUG] 음성 감지 안됨: no-speech. 재시작 대기 중...');
+                    } else {
+                        // 그 외의 다른 오류는 모달로 표시
+                        console.error('[DEBUG] 음성 인식 오류:', event.error);
+                        showErrorModal(`음성 인식 오류가 발생했습니다: ${event.error}`);
                     }
                 };
                 
