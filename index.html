@@ -320,7 +320,8 @@
             let recognition = null;
             let isRecognizing = false;
             let hasShownInitialPermissionError = false; 
-            let isPermissionDenied = false; // 마이크 권한이 거부되었는지 추적하는 새로운 플래그
+            let isPermissionDenied = false; // 마이크 권한이 거부되었는지 추적하는 플래그
+            let isInitialized = false; // 앱 초기화가 완료되었는지 추적하는 플래그
 
             const SCROLL_UP_COMMANDS = [
                 '위로 올려줘', '위로 올려', '올려줘', '올려', '스크롤 위로', '스크롤 올려', '스크롤업',
@@ -366,16 +367,17 @@
                 errorModal.classList.remove('show');
             }
 
-            // 음성 인식 시작 (연속 청취 모드)
-            async function startRecognition() {
+            // 음성 인식 시작
+            function startRecognition() {
                 if (!SpeechRecognition) {
                     showErrorModal('죄송합니다. 이 브라우저는 음성 인식을 지원하지 않습니다.');
                     return;
                 }
                 
+                // 이미 인식 중이거나 권한이 거부되었다면 함수를 즉시 종료
                 if (isRecognizing || isPermissionDenied) return;
+                
                 isRecognizing = true;
-
                 if (!recognition) {
                     recognition = new SpeechRecognition();
                     recognition.continuous = true; 
@@ -384,7 +386,6 @@
                     recognition.maxAlternatives = 10;
                 }
                 
-                // 이벤트 핸들러 설정
                 recognition.onstart = () => {
                     console.log("[DEBUG] 음성 인식 시작됨.");
                     statusBar.classList.remove('hidden');
@@ -393,21 +394,17 @@
 
                 recognition.onresult = (event) => {
                     let finalTranscript = '';
-                    
                     for (let i = event.resultIndex; i < event.results.length; ++i) {
                         const result = event.results[i];
                         if (result.isFinal) {
                             finalTranscript += result[0].transcript;
                         }
                     }
-                    
                     if (finalTranscript) {
                         statusText.textContent = `인식됨: "${finalTranscript}"`;
                         console.log("[DEBUG] 인식된 최종 음성:", finalTranscript);
-                        
                         const command = finalTranscript.trim();
                         const normalizedCommand = command.toLowerCase().replace(/\s/g, '');
-                        
                         const visibleHeight = videoFeed.clientHeight;
                         const scrollAmount = visibleHeight / 2;
                         let commandExecuted = false;
@@ -420,7 +417,6 @@
                             videoFeed.scrollBy({ top: -scrollAmount, behavior: 'smooth' });
                             commandExecuted = true;
                         }
-
                         if (!commandExecuted) {
                             const isScrollDownCommand = SCROLL_DOWN_COMMANDS.some(cmd => 
                                 normalizedCommand.includes(cmd.toLowerCase().replace(/\s/g, ''))
@@ -435,16 +431,10 @@
                 };
                 
                 recognition.onerror = (event) => {
-                    if (event.error === 'no-speech') {
-                         console.log('[DEBUG] 음성이 감지되지 않았습니다. (no-speech)');
-                         return;
-                    }
-                    
                     console.error('[DEBUG] 음성 인식 오류:', event.error);
                     isRecognizing = false;
                     resetUI();
                     
-                    // 마이크 권한이 거부되면 isPermissionDenied 플래그를 설정하고, 더 이상 재시도하지 않습니다.
                     if (event.error === 'not-allowed') {
                         isPermissionDenied = true;
                         if (!hasShownInitialPermissionError) {
@@ -455,24 +445,28 @@
                             ];
                             showErrorModalWithList("마이크 접근이 거부되었습니다. 더 이상 음성 인식을 시도하지 않습니다. 아래 단계를 따라 수동으로 권한을 허용해주세요.", instructions);
                             hasShownInitialPermissionError = true;
+                        } else {
+                            // 이미 권한 거부 팝업을 표시했다면, 더 이상 아무것도 하지 않음.
+                             console.warn("[DEBUG] 마이크 권한이 거부되었으며, 이미 팝업을 표시했습니다. 재시작하지 않습니다.");
                         }
-                    } else {
+                    } else if (event.error !== 'no-speech') {
                          showErrorModal(`음성 인식 오류가 발생했습니다: ${event.error}`);
                     }
                 };
                 
-                // 음성 인식 종료 시, isPermissionDenied 상태를 확인하여 재시작을 결정합니다.
                 recognition.onend = () => {
                     isRecognizing = false;
                     resetUI();
 
+                    // 권한이 거부되지 않았을 때만 재시작
                     if (!isPermissionDenied) {
                         console.log("[DEBUG] 음성 인식 종료됨. 1초 후 재시작합니다.");
                          setTimeout(() => {
-                            checkMicrophonePermissionAndStart();
+                            startRecognition();
                         }, 1000);
                     } else {
                          console.log("[DEBUG] 마이크 권한이 거부된 상태이므로, 음성 인식을 재시작하지 않습니다.");
+                         statusBar.classList.add('hidden');
                     }
                 };
                 
@@ -482,17 +476,33 @@
 
             // 마이크 권한을 확인하고 음성 인식을 시작하는 함수
             async function checkMicrophonePermissionAndStart() {
-                // 이미 권한이 거부된 상태라면 재시작하지 않습니다.
-                if (isPermissionDenied) {
-                    console.warn("[DEBUG] 마이크 권한이 거부된 상태입니다. 음성 인식을 시작하지 않습니다.");
-                    return;
-                }
-
+                if (isInitialized) return; // 초기화는 한 번만 수행
+                isInitialized = true;
+                
                 try {
                     const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
 
-                    if (permissionStatus.state === 'granted' || permissionStatus.state === 'prompt') {
-                        console.log("[DEBUG] 마이크 권한 상태: '허용' 또는 '요청 필요'. 음성 인식을 시작합니다.");
+                    permissionStatus.onchange = (event) => {
+                         console.log("[DEBUG] 마이크 권한 상태가 변경되었습니다:", event.target.state);
+                         if (event.target.state === 'denied' && !hasShownInitialPermissionError) {
+                            isPermissionDenied = true;
+                            // 권한 변경으로 인해 거부되었을 때도 팝업을 띄우고 재시도를 막음
+                            const instructions = [
+                                '1. 브라우저 주소창 왼쪽에 있는 **자물쇠** 또는 **마이크 아이콘**을 클릭합니다.',
+                                '2. 권한 설정 메뉴에서 **마이크** 항목을 찾아 **"허용"**으로 변경합니다.',
+                                '3. 이 페이지를 **새로고침**합니다.'
+                            ];
+                            showErrorModalWithList("마이크 접근이 거부되었습니다. 더 이상 음성 인식을 시도하지 않습니다. 아래 단계를 따라 수동으로 권한을 허용해주세요.", instructions);
+                            hasShownInitialPermissionError = true;
+                            statusBar.classList.add('hidden');
+                            if (isRecognizing) {
+                                recognition.stop(); // 인식 중이라면 중단
+                            }
+                        }
+                    };
+
+                    if (permissionStatus.state === 'granted') {
+                        console.log("[DEBUG] 마이크 권한이 이미 '허용' 상태입니다. 음성 인식을 시작합니다.");
                         startRecognition();
                     } else if (permissionStatus.state === 'denied') {
                         console.error("[DEBUG] 마이크 권한이 '거부' 상태입니다. 음성 인식을 시작하지 않습니다.");
@@ -506,10 +516,16 @@
                             showErrorModalWithList("마이크 접근이 거부되었습니다. 더 이상 음성 인식을 시도하지 않습니다. 아래 단계를 따라 수동으로 권한을 허용해주세요.", instructions);
                             hasShownInitialPermissionError = true;
                         }
+                        statusBar.classList.add('hidden');
+                    } else if (permissionStatus.state === 'prompt') {
+                        console.log("[DEBUG] 마이크 권한 요청이 필요합니다. 음성 인식을 시작하여 사용자에게 팝업을 표시합니다.");
+                        startRecognition(); 
                     }
                 } catch (error) {
                     console.error("[DEBUG] 마이크 권한을 확인하는 중 오류가 발생했습니다:", error);
                     showErrorModal(`마이크 접근 오류가 발생했습니다: ${error.message}`);
+                    isPermissionDenied = true; // 오류 발생 시에도 재시도 차단
+                    statusBar.classList.add('hidden');
                 }
             }
 
@@ -518,12 +534,7 @@
                 statusText.textContent = '대기 중...';
             }
             
-            // 앱 로드 시 마이크 권한을 확인하고 음성 인식을 시작합니다.
-            init();
-            
-            function init() {
-                checkMicrophonePermissionAndStart();
-            }
+            checkMicrophonePermissionAndStart();
 
             // 오류 팝업 닫기 버튼 이벤트
             closeErrorModalButton.addEventListener('click', hideErrorModal);
