@@ -319,7 +319,7 @@
             
             let recognition = null;
             let isRecognizing = false;
-            let hasShownInitialPermissionError = false;
+            let hasShownInitialPermissionError = false; // 마이크 권한 오류 팝업을 이미 한 번 표시했는지 확인하는 플래그
 
             const SCROLL_UP_COMMANDS = [
                 '위로 올려줘', '위로 올려', '올려줘', '올려', '스크롤 위로', '스크롤 올려', '스크롤업',
@@ -434,17 +434,18 @@
                 };
                 
                 recognition.onerror = (event) => {
-                    // 'no-speech' 오류는 무시합니다.
+                    // 'no-speech' 오류는 무시하고, 다른 오류만 처리합니다.
                     if (event.error === 'no-speech') {
-                         // 디버깅 메시지를 일반 로그로 변경하여 오류처럼 보이지 않게 합니다.
                          console.log('[DEBUG] 음성이 감지되지 않았습니다. (no-speech)');
                          return;
                     }
                     
                     console.error('[DEBUG] 음성 인식 오류:', event.error);
                     
+                    // 'not-allowed' 오류는 마이크 권한이 거부되었을 때 발생합니다.
                     if (event.error === 'not-allowed') {
-                        // 초기 권한 거부 시에만 팝업을 띄우고 그 이후에는 무시합니다.
+                        // `hasShownInitialPermissionError` 플래그를 사용하여
+                        // 마이크 권한 오류 팝업이 최초 한 번만 나타나도록 합니다.
                         if (!hasShownInitialPermissionError) {
                             const instructions = [
                                 '1. 브라우저 주소창 왼쪽에 있는 **자물쇠** 또는 **마이크 아이콘**을 클릭합니다.',
@@ -493,13 +494,21 @@
                     startRecognition();
                 } catch (error) {
                     console.error("[DEBUG] 마이크 권한 요청 실패:", error);
-                    hasShownInitialPermissionError = true;
-                    const instructions = [
-                        '1. 브라우저 주소창 왼쪽에 있는 **자물쇠** 또는 **마이크 아이콘**을 클릭합니다.',
-                        '2. 권한 설정 메뉴에서 **마이크** 항목을 찾아 **"허용"**으로 변경합니다.',
-                        '3. 이 페이지를 **새로고침**합니다.'
-                    ];
-                    showErrorModalWithList("마이크 접근이 거부되었습니다. 아래 단계를 따라 수동으로 권한을 허용해주세요.", instructions);
+                    // 마이크 권한 요청이 거부되면, 'not-allowed' 에러가 발생합니다.
+                    // 이 경우, `hasShownInitialPermissionError` 플래그를 설정하여
+                    // 팝업이 다시 뜨지 않도록 합니다.
+                    if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                        hasShownInitialPermissionError = true;
+                        const instructions = [
+                            '1. 브라우저 주소창 왼쪽에 있는 **자물쇠** 또는 **마이크 아이콘**을 클릭합니다.',
+                            '2. 권한 설정 메뉴에서 **마이크** 항목을 찾아 **"허용"**으로 변경합니다.',
+                            '3. 이 페이지를 **새로고침**합니다.'
+                        ];
+                        showErrorModalWithList("마이크 접근이 거부되었습니다. 아래 단계를 따라 수동으로 권한을 허용해주세요.", instructions);
+                    } else {
+                        // 기타 다른 종류의 오류는 일반 오류로 처리합니다.
+                        showErrorModal(`마이크 접근 오류가 발생했습니다: ${error.message}`);
+                    }
                 }
             }
             init();
