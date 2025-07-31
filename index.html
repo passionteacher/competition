@@ -238,22 +238,29 @@
             <!-- 추가 비디오 카드 끝 -->
         </main>
 
-        <!-- 음성 인식 상태 메시지 바 -->
-        <div id="speechStatusBar" class="speech-status-bar">
-            <!-- 마이크 아이콘 -->
-            <svg id="micIcon" class="h-6 w-6 mr-2 text-white opacity-60 transition-opacity duration-300" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 1a3 3 0 00-3 3v6a3 3 0 006 0V4a3 3 0 00-3-3zM3 10a9 9 0 0018 0h-2a7 7 0 01-14 0H3zm9 13c-2.76 0-5-2.24-5-5h2c0 1.65 1.35 3 3 3s3-1.35 3-3h2c0 2.76-2.24 5-5 5z"/>
-            </svg>
-            <span id="speechStatus">음성 인식 시작 중...</span>
+        <!-- 음성 인식 시작 버튼과 상태 메시지 바를 포함하는 하단 영역 -->
+        <div class="speech-status-bar">
+            <button id="startButton" class="px-6 py-3 bg-blue-600 text-white font-bold rounded-full shadow-lg hover:bg-blue-700 transition-colors duration-200">
+                음성 인식 시작하기
+            </button>
+            <div id="statusContainer" class="flex items-center hidden">
+                 <!-- 마이크 아이콘 -->
+                <svg id="micIcon" class="h-6 w-6 mr-2 text-white opacity-60 transition-opacity duration-300" fill="none" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M12 1a3 3 0 00-3 3v6a3 3 0 006 0V4a3 3 0 00-3-3zM3 10a9 9 0 0018 0h-2a7 7 0 01-14 0H3zm9 13c-2.76 0-5-2.24-5-5h2c0 1.65 1.35 3 3 3s3-1.35 3-3h2c0 2.76-2.24 5-5 5z"/>
+                </svg>
+                <span id="speechStatus">음성 인식 시작 중...</span>
+            </div>
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             const videoFeed = document.querySelector('.video-feed');
+            const startButton = document.getElementById('startButton');
+            const statusContainer = document.getElementById('statusContainer');
             const speechStatus = document.getElementById('speechStatus');
             const micIcon = document.getElementById('micIcon');
-            const speechStatusBar = document.getElementById('speechStatusBar');
+            const speechStatusBar = document.querySelector('.speech-status-bar');
 
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -276,7 +283,7 @@
             ];
             const COMMAND_TIMEOUT_MS = 5000;
             let isMicPermissionDenied = false;
-            let isRecognitionActive = false; // 음성 인식 활성화 상태를 추적하는 플래그
+            let isRecognitionActive = false;
 
             // '삐' 소리 재생 함수
             function playSound() {
@@ -324,7 +331,7 @@
                 console.log("[DEBUG] 상태 리셋: 웨이크 워드 대기 중.");
             }
 
-            // 음성 인식 시작/재시작 함수
+            // 음성 인식 시작 함수
             function startSpeechRecognition() {
                 // 마이크 권한이 거부되었거나 이미 활성화된 경우 중복 실행 방지
                 if (isMicPermissionDenied || isRecognitionActive) {
@@ -505,9 +512,11 @@
                     isRecognitionActive = false;
                 }
             }
-
-            // 페이지 로드 시 바로 음성 인식을 시작합니다.
-            window.addEventListener('DOMContentLoaded', () => {
+            
+            // "음성 인식 시작하기" 버튼 클릭 이벤트 핸들러
+            startButton.addEventListener('click', () => {
+                startButton.classList.add('hidden');
+                statusContainer.classList.remove('hidden');
                 startSpeechRecognition();
             });
         });
