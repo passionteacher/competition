@@ -327,177 +327,178 @@
                 speechStatusBar.classList.remove('listening-for-command', 'command-executed', 'error-state');
                 console.log("[DEBUG] 상태 리셋: 웨이크 워드 대기 중.");
             }
+            
+            // 음성 인식 객체를 단 한 번만 생성하고, 이벤트 핸들러를 설정합니다.
+            // 이렇게 하면 'onend' 이벤트가 발생했을 때 객체를 재활용하여 권한 팝업이 다시 뜨는 것을 방지할 수 있습니다.
+            if (SpeechRecognition) {
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = false;
+                recognition.lang = 'ko-KR'; 
+                recognition.maxAlternatives = 10;
 
-            function startSpeechRecognition() {
-                if (!SpeechRecognition) {
-                    speechStatus.textContent = '죄송합니다. 이 브라우저는 음성 인식을 지원하지 않습니다.';
-                    console.warn('Web Speech API (SpeechRecognition) is not supported in this browser.');
-                    return;
-                }
+                recognition.onstart = () => {
+                    isRecognitionActive = true;
+                    micIcon.classList.add('mic-pulsing');
+                    micIcon.style.opacity = '1';
+                    console.log("[DEBUG] 음성 인식 시작됨. isRecognitionActive: " + isRecognitionActive);
+                    resetWakeWordState();
+                };
 
-                if (!recognition) {
-                    recognition = new SpeechRecognition();
-                    recognition.continuous = true;
-                    recognition.interimResults = false;
-                    recognition.lang = 'ko-KR'; 
-                    recognition.maxAlternatives = 10;
-
-                    recognition.onstart = () => {
-                        isRecognitionActive = true;
-                        micIcon.classList.add('mic-pulsing');
-                        micIcon.style.opacity = '1';
-                        console.log("[DEBUG] 음성 인식 시작됨. isRecognitionActive: " + isRecognitionActive);
-                        resetWakeWordState();
-                    };
-
-                    recognition.onresult = (event) => {
-                        let transcript = '';
-                        for (let i = event.resultIndex; i < event.results.length; ++i) {
-                            if (event.results[i].isFinal) {
-                                transcript += event.results[i][0].transcript;
-                            }
+                recognition.onresult = (event) => {
+                    let transcript = '';
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        if (event.results[i].isFinal) {
+                            transcript += event.results[i][0].transcript;
                         }
-                        const command = transcript.trim();
-                        console.log("[DEBUG] 인식된 최종 음성:", command);
-                        
-                        const normalizedCommand = command.toLowerCase().replace(/\s/g, '');
+                    }
+                    const command = transcript.trim();
+                    console.log("[DEBUG] 인식된 최종 음성:", command);
+                    
+                    const normalizedCommand = command.toLowerCase().replace(/\s/g, '');
 
-                        if (!wakeWordDetected) {
-                            const wakeWordNormalized = WAKE_WORD.toLowerCase().replace(/\s/g, '');
-                            if (normalizedCommand.includes(wakeWordNormalized)) {
-                                wakeWordDetected = true;
-                                playSound();
-                                speechStatus.textContent = `"${WAKE_WORD}" 감지됨! 이제 "위로 올려줘" 또는 "아래로 내려줘"라고 말해주세요. (명령 대기 중)`;
-                                speechStatusBar.classList.add('listening-for-command');
-                                console.log("[DEBUG] 웨이크 워드 감지됨. wakeWordDetected: " + wakeWordDetected);
-                                clearTimeout(commandTimeout);
-                                commandTimeout = setTimeout(() => {
-                                    speechStatus.textContent = "명령 대기 시간이 초과되었습니다. 다시 '하이 빅스비'라고 말해주세요.";
-                                    resetWakeWordState();
-                                    console.log("[DEBUG] 명령 타임아웃 발생. 상태 리셋.");
-                                }, COMMAND_TIMEOUT_MS);
-                            }
-                        } else {
+                    if (!wakeWordDetected) {
+                        const wakeWordNormalized = WAKE_WORD.toLowerCase().replace(/\s/g, '');
+                        if (normalizedCommand.includes(wakeWordNormalized)) {
+                            wakeWordDetected = true;
+                            playSound();
+                            speechStatus.textContent = `"${WAKE_WORD}" 감지됨! 이제 "위로 올려줘" 또는 "아래로 내려줘"라고 말해주세요. (명령 대기 중)`;
+                            speechStatusBar.classList.add('listening-for-command');
+                            console.log("[DEBUG] 웨이크 워드 감지됨. wakeWordDetected: " + wakeWordDetected);
                             clearTimeout(commandTimeout);
+                            commandTimeout = setTimeout(() => {
+                                speechStatus.textContent = "명령 대기 시간이 초과되었습니다. 다시 '하이 빅스비'라고 말해주세요.";
+                                resetWakeWordState();
+                                console.log("[DEBUG] 명령 타임아웃 발생. 상태 리셋.");
+                            }, COMMAND_TIMEOUT_MS);
+                        }
+                    } else {
+                        clearTimeout(commandTimeout);
 
-                            const visibleHeight = videoFeed.clientHeight;
-                            const scrollAmount = visibleHeight / 2;
+                        const visibleHeight = videoFeed.clientHeight;
+                        const scrollAmount = visibleHeight / 2;
 
-                            let commandExecuted = false;
+                        let commandExecuted = false;
 
-                            const isScrollUpCommand = SCROLL_UP_COMMANDS.some(cmd => 
+                        const isScrollUpCommand = SCROLL_UP_COMMANDS.some(cmd => 
+                            normalizedCommand.includes(cmd.toLowerCase().replace(/\s/g, ''))
+                        );
+
+                        if (isScrollUpCommand) {
+                            console.log(`[DEBUG] '위로 올려줘' 명령 실행.`);
+                            videoFeed.scrollBy({
+                                top: -scrollAmount,
+                                behavior: 'smooth'
+                            });
+                            playSound();
+                            speechStatus.textContent = '위로 반만 스크롤했습니다!';
+                            speechStatusBar.classList.add('command-executed');
+                            commandExecuted = true;
+                        }
+
+                        if (!commandExecuted) {
+                            const isScrollDownCommand = SCROLL_DOWN_COMMANDS.some(cmd => 
                                 normalizedCommand.includes(cmd.toLowerCase().replace(/\s/g, ''))
                             );
 
-                            if (isScrollUpCommand) {
-                                console.log(`[DEBUG] '위로 올려줘' 명령 실행.`);
+                            if (isScrollDownCommand) {
+                                console.log(`[DEBUG] '아래로 내려줘' 명령 실행.`);
                                 videoFeed.scrollBy({
-                                    top: -scrollAmount,
+                                    top: scrollAmount,
                                     behavior: 'smooth'
                                 });
                                 playSound();
-                                speechStatus.textContent = '위로 반만 스크롤했습니다!';
+                                speechStatus.textContent = '아래로 반만 스크롤했습니다!';
                                 speechStatusBar.classList.add('command-executed');
                                 commandExecuted = true;
                             }
-
-                            if (!commandExecuted) {
-                                const isScrollDownCommand = SCROLL_DOWN_COMMANDS.some(cmd => 
-                                    normalizedCommand.includes(cmd.toLowerCase().replace(/\s/g, ''))
-                                );
-
-                                if (isScrollDownCommand) {
-                                    console.log(`[DEBUG] '아래로 내려줘' 명령 실행.`);
-                                    videoFeed.scrollBy({
-                                        top: scrollAmount,
-                                        behavior: 'smooth'
-                                    });
-                                    playSound();
-                                    speechStatus.textContent = '아래로 반만 스크롤했습니다!';
-                                    speechStatusBar.classList.add('command-executed');
-                                    commandExecuted = true;
-                                }
-                            }
-                            
-                            if (commandExecuted) {
-                                setTimeout(() => resetWakeWordState(), 1500);
-                            } else {
-                                console.log("[DEBUG] 알 수 없는 명령 (웨이크 워드 후). 명령:", command);
-                                speechStatus.textContent = `알 수 없는 명령: "${command}". 다시 "위로 올려줘" 또는 "아래로 내려줘"라고 말해주세요.`;
-                                speechStatusBar.classList.add('error-state');
-                                setTimeout(() => resetWakeWordState(), 2500);
-                            }
                         }
-                    };
-
-                    recognition.onerror = (event) => {
-                        console.error('[DEBUG] 음성 인식 오류:', event.error);
-                        isRecognitionActive = false;
-                        micIcon.classList.remove('mic-pulsing');
-                        micIcon.style.opacity = '0.6';
                         
-                        let errorMessage = `음성 인식 오류: ${event.error}. `;
-                        if (event.error === 'network') {
-                            errorMessage += `네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.`;
-                        } else if (event.error === 'not-allowed') {
-                            errorMessage += `마이크 접근이 허용되지 않았습니다. 브라우저 주소창의 마이크 아이콘을 확인하고 권한을 허용해주세요.`;
-                        } else if (event.error === 'no-speech') {
-                            errorMessage += `음성을 감지하지 못했습니다. 마이크가 제대로 연결되어 있고, 브라우저 주소창의 마이크 아이콘이 켜져 있는지 확인해주세요.`;
-                            console.error('[CONSOLE_ERROR] "no-speech" 오류가 발생했습니다. 마이크가 제대로 연결되어 있고, 브라우저 주소창의 마이크 권한이 허용되어 있는지 확인해주세요.');
-                        }
-                        speechStatus.textContent = errorMessage + ` 재시작 중...`;
-                        speechStatusBar.classList.add('error-state');
-                        resetWakeWordState();
-                    };
-
-                    recognition.onend = () => {
-                        console.log("[DEBUG] 음성 인식 종료됨. isRecognitionActive: " + isRecognitionActive);
-                        isRecognitionActive = false;
-                        micIcon.classList.remove('mic-pulsing');
-                        micIcon.style.opacity = '0.6';
-                        
-                        speechStatus.textContent = '음성 인식 재시작 중...';
-                        setTimeout(() => {
-                            console.log("[DEBUG] onend 후 재시작 시도. isRecognitionActive: " + isRecognitionActive);
-                            startSpeechRecognition();
-                        }, 500);
-                    };
-
-                    recognition.onnomatch = (event) => {
-                        console.log("[DEBUG] 인식된 음성이 없습니다. (onnomatch)");
-                        if (wakeWordDetected) {
-                            speechStatus.textContent = "명령을 이해하지 못했습니다. 다시 말해주세요.";
+                        if (commandExecuted) {
+                            setTimeout(() => resetWakeWordState(), 1500);
+                        } else {
+                            console.log("[DEBUG] 알 수 없는 명령 (웨이크 워드 후). 명령:", command);
+                            speechStatus.textContent = `알 수 없는 명령: "${command}". 다시 "위로 올려줘" 또는 "아래로 내려줘"라고 말해주세요.`;
                             speechStatusBar.classList.add('error-state');
                             setTimeout(() => resetWakeWordState(), 2500);
                         }
-                    };
-
-                    recognition.onsoundend = () => {
-                        console.log("[DEBUG] 소리 감지 종료 (onsoundend).");
-                    };
-                }
-
-                if (!isRecognitionActive) {
-                    try {
-                        recognition.start();
-                        console.log("[DEBUG] recognition.start() 호출됨.");
-                    } catch (e) {
-                        console.error("[DEBUG] 음성 인식 시작 실패 (catch):", e);
-                        if (e.name !== 'InvalidStateError') {
-                            speechStatus.textContent = `음성 인식 시작 실패: ${e.message}. 페이지를 새로고침해주세요.`;
-                            isRecognitionActive = false;
-                            micIcon.classList.remove('mic-pulsing');
-                            micIcon.style.opacity = '0.6';
-                            speechStatusBar.classList.remove('listening-for-command', 'command-executed', 'error-state');
-                        }
                     }
-                } else {
-                    console.warn("[DEBUG] 음성 인식 이미 활성화 중입니다. 다시 시작하지 않습니다.");
-                }
-            }
+                };
 
-            // 페이지 로드 시 바로 음성 인식을 시작합니다.
-            window.addEventListener('DOMContentLoaded', startSpeechRecognition);
+                recognition.onerror = (event) => {
+                    console.error('[DEBUG] 음성 인식 오류:', event.error);
+                    isRecognitionActive = false;
+                    micIcon.classList.remove('mic-pulsing');
+                    micIcon.style.opacity = '0.6';
+                    
+                    let errorMessage = `음성 인식 오류: ${event.error}. `;
+                    if (event.error === 'network') {
+                        errorMessage += `네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.`;
+                    } else if (event.error === 'not-allowed') {
+                        // 'not-allowed' 오류는 치명적이므로, 더 이상 재시도하지 않습니다.
+                        errorMessage += `마이크 접근이 허용되지 않았습니다. 브라우저 주소창의 마이크 아이콘을 확인하고 권한을 허용해주세요.`;
+                        console.error('[CONSOLE_ERROR] ' + errorMessage);
+                        speechStatus.textContent = errorMessage;
+                        speechStatusBar.classList.add('error-state');
+                        return; // onend가 재시작하지 않도록 함수 종료
+                    } else if (event.error === 'no-speech') {
+                        errorMessage += `음성을 감지하지 못했습니다.`;
+                        console.error('[CONSOLE_ERROR] "no-speech" 오류가 발생했습니다. 마이크가 제대로 연결되어 있고, 브라우저 주소창의 마이크 권한이 허용되어 있는지 확인해주세요.');
+                    }
+                    speechStatus.textContent = errorMessage + ` 재시작 중...`;
+                    speechStatusBar.classList.add('error-state');
+                    resetWakeWordState();
+                };
+
+                recognition.onend = () => {
+                    console.log("[DEBUG] 음성 인식 종료됨. isRecognitionActive: " + isRecognitionActive);
+                    isRecognitionActive = false;
+                    micIcon.classList.remove('mic-pulsing');
+                    micIcon.style.opacity = '0.6';
+
+                    // 오류가 'not-allowed'가 아닌 경우에만 재시작합니다.
+                    if (speechStatus.textContent.includes('허용되지 않았습니다')) {
+                        console.log("[DEBUG] 'not-allowed' 오류로 인해 재시작하지 않습니다.");
+                        return;
+                    }
+
+                    speechStatus.textContent = '음성 인식 재시작 중...';
+                    setTimeout(() => {
+                        console.log("[DEBUG] onend 후 재시작 시도. isRecognitionActive: " + isRecognitionActive);
+                        try {
+                            recognition.start();
+                        } catch (e) {
+                             console.error("[DEBUG] onend 후 재시작 실패:", e);
+                        }
+                    }, 500);
+                };
+
+                recognition.onnomatch = (event) => {
+                    console.log("[DEBUG] 인식된 음성이 없습니다. (onnomatch)");
+                    if (wakeWordDetected) {
+                        speechStatus.textContent = "명령을 이해하지 못했습니다. 다시 말해주세요.";
+                        speechStatusBar.classList.add('error-state');
+                        setTimeout(() => resetWakeWordState(), 2500);
+                    }
+                };
+
+                recognition.onsoundend = () => {
+                    console.log("[DEBUG] 소리 감지 종료 (onsoundend).");
+                };
+
+                // 페이지 로드 시 바로 음성 인식을 시작합니다.
+                try {
+                    recognition.start();
+                    console.log("[DEBUG] recognition.start() 호출됨.");
+                } catch (e) {
+                    console.error("[DEBUG] 초기 음성 인식 시작 실패 (catch):", e);
+                    speechStatus.textContent = `음성 인식 시작 실패: ${e.message}. 페이지를 새로고침하거나 브라우저 설정을 확인해주세요.`;
+                    speechStatusBar.classList.add('error-state');
+                }
+            } else {
+                speechStatus.textContent = '죄송합니다. 이 브라우저는 음성 인식을 지원하지 않습니다.';
+                console.warn('Web Speech API (SpeechRecognition) is not supported in this browser.');
+            }
         });
     </script>
 </body>
