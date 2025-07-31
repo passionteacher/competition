@@ -352,6 +352,7 @@
             let recognition = null;
             let wakeWordDetected = false;
             let commandTimeout = null;
+            let isRecognitionActive = false;
 
             const WAKE_WORD = '하이 빅스비';
             const SCROLL_UP_COMMANDS = [
@@ -365,7 +366,6 @@
                 '스끄롤 다운', '스끄롤 따운', '쓰끄롤 따운'
             ];
             const COMMAND_TIMEOUT_MS = 5000;
-            let isRecognitionActive = false;
 
             // 오류 팝업 표시 함수
             function showErrorModal(message) {
@@ -395,11 +395,9 @@
                 errorModal.classList.add('show');
             }
 
-            // 오류 팝업 숨기기 함수
+            // 오류 팝업 숨기기 함수 (페이지 새로고침 제거)
             function hideErrorModal() {
                 errorModal.classList.remove('show');
-                // 오류 팝업을 닫으면 페이지를 새로고침하여 초기화 시도
-                window.location.reload();
             }
             
             // '삐' 소리 재생 함수
