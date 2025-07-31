@@ -463,13 +463,16 @@
                     return;
                 }
                 
-                isRecognitionActive = true;
+                // SpeechRecognition 객체를 한 번만 생성
+                if (!recognition) {
+                    recognition = new SpeechRecognition();
+                    recognition.continuous = true; 
+                    recognition.interimResults = true; 
+                    recognition.lang = 'ko-KR'; 
+                    recognition.maxAlternatives = 10;
+                }
                 
-                recognition = new SpeechRecognition();
-                recognition.continuous = true; 
-                recognition.interimResults = true; 
-                recognition.lang = 'ko-KR'; 
-                recognition.maxAlternatives = 10;
+                isRecognitionActive = true;
 
                 // 이벤트 핸들러 설정
                 recognition.onstart = () => {
@@ -599,19 +602,14 @@
                         speechStatus.textContent = errorMessage;
                         showErrorModal(errorMessage);
                     }
+                    
+                    // 기존의 재시작 로직을 제거
+                    // onend 핸들러도 제거했기 때문에, 이제 재시작이 자동으로 일어나지 않음.
+                    // 오류 발생 시 사용자가 직접 새로고침하도록 유도하는 것이 더 안정적임.
                 };
-
-                recognition.onend = () => {
-                    console.log("[DEBUG] 음성 인식 종료됨.");
-                    isRecognitionActive = false;
-                    micIcon.classList.remove('mic-pulsing');
-                    micIcon.style.opacity = '0.6';
-                    // 1초 후 재시작 시도 (Too fast) 오류 방지
-                    console.log("[DEBUG] 1초 후 음성 인식을 재시작합니다.");
-                    setTimeout(() => {
-                        startSpeechRecognition();
-                    }, 1000);
-                };
+                
+                // onend 핸들러를 제거하여 불필요한 재시작을 방지
+                // recognition.onend = () => { ... }
                 
                 recognition.start();
                 console.log("[DEBUG] recognition.start() 호출됨.");
