@@ -138,59 +138,10 @@
         .speech-status-bar.error-state {
             background-color: #dc2626;
         }
-
-        .permission-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(255, 255, 255, 0.9);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 20;
-            padding: 1rem;
-            text-align: center;
-            border-radius: 1.5rem;
-        }
-        .permission-overlay h2 {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #1a202c;
-            margin-bottom: 1rem;
-        }
-        .permission-overlay p {
-            font-size: 1rem;
-            color: #4a5568;
-            margin-bottom: 2rem;
-        }
-        .permission-button {
-            background-color: #ef4444;
-            color: white;
-            padding: 0.75rem 2rem;
-            border-radius: 9999px;
-            font-weight: 600;
-            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
-            transition: all 0.2s ease-in-out;
-        }
-        .permission-button:hover {
-            background-color: #dc2626;
-            transform: translateY(-2px);
-            box-shadow: 0 6px 16px rgba(239, 68, 68, 0.4);
-        }
     </style>
 </head>
 <body class="bg-gray-100">
     <div class="app-container">
-        <!-- 마이크 권한 요청 오버레이 -->
-        <div id="permissionOverlay" class="permission-overlay hidden">
-            <h2>마이크 권한이 필요합니다</h2>
-            <p>음성 명령을 사용하려면 마이크 접근을 허용해주세요.</p>
-            <button id="requestPermissionBtn" class="permission-button">마이크 권한 요청</button>
-        </div>
-
         <!-- 상단 헤더 바 -->
         <header class="header">
             <div class="flex items-center">
@@ -303,8 +254,6 @@
             const speechStatus = document.getElementById('speechStatus');
             const micIcon = document.getElementById('micIcon');
             const speechStatusBar = document.getElementById('speechStatusBar');
-            const permissionOverlay = document.getElementById('permissionOverlay');
-            const requestPermissionBtn = document.getElementById('requestPermissionBtn');
 
             const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
             const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -547,39 +496,8 @@
                 }
             }
 
-            // 마이크 권한을 요청하는 함수 (getUserMedia를 통해 명시적으로 요청)
-            async function requestMicPermission() {
-                try {
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    // 권한 허용됨. 스트림을 닫고 음성 인식을 시작
-                    stream.getTracks().forEach(track => track.stop());
-                    
-                    permissionOverlay.classList.add('hidden');
-                    speechStatus.textContent = "마이크 권한이 허용되었습니다. 음성 인식을 시작합니다.";
-                    startSpeechRecognition(); // 음성 인식 시작
-                } catch (err) {
-                    console.error('[DEBUG] 마이크 권한 요청 실패:', err);
-                    permissionOverlay.querySelector('p').textContent = '마이크 권한 요청에 실패했습니다. 브라우저 설정을 확인해주세요.';
-                    
-                    if (err.name === 'NotAllowedError' || err.name === 'SecurityError') {
-                        speechStatus.textContent = '마이크 권한이 거부되었습니다. 브라우저 설정에서 이 사이트의 마이크 권한을 허용해주세요.';
-                    } else if (err.name === 'NotFoundError') {
-                        speechStatus.textContent = '마이크를 찾을 수 없습니다. 마이크가 연결되어 있는지 확인해주세요.';
-                    } else {
-                        speechStatus.textContent = `오류: ${err.name}. 페이지를 새로고침해주세요.`;
-                    }
-                }
-            }
-
-            requestPermissionBtn.addEventListener('click', requestMicPermission);
-            
-            // 페이지 로드 시 오버레이를 표시하고, 사용자에게 권한 요청 버튼을 누르도록 유도
-            document.addEventListener('DOMContentLoaded', () => {
-                // 초기에 오버레이를 보여주고, 상태 바 메시지를 변경
-                permissionOverlay.classList.remove('hidden');
-                speechStatus.textContent = '시작하려면 위 버튼을 눌러주세요.';
-                micIcon.style.opacity = '0.2'; // 비활성화 상태임을 나타냄
-            });
+            // 페이지 로드 시 바로 음성 인식을 시작합니다.
+            window.addEventListener('DOMContentLoaded', startSpeechRecognition);
         });
     </script>
 </body>
