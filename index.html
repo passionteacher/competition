@@ -617,30 +617,42 @@
                 console.log("[DEBUG] recognition.start() 호출됨.");
             }
 
-            // 초기화 함수: 마이크 권한을 요청하고 스트림을 얻는 부분
+            // 초기화 함수: 마이크 권한을 요청하기 전에 상태를 먼저 확인합니다.
             async function init() {
                 speechStatus.textContent = '마이크 권한을 확인 중입니다...';
                 try {
-                    // 마이크 권한 요청 및 스트림 얻기
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                    console.log("[DEBUG] 마이크 권한 허용됨. 스트림 획득 성공.");
-                    
-                    // 권한이 허용되면 음성 인식을 시작합니다.
-                    startSpeechRecognition();
+                    // navigator.permissions API를 사용하여 마이크 권한 상태를 확인합니다.
+                    const permissionStatus = await navigator.permissions.query({ name: 'microphone' });
+                    console.log("[DEBUG] 마이크 권한 상태:", permissionStatus.state);
 
+                    if (permissionStatus.state === 'granted') {
+                        // 이미 허용된 경우, 바로 음성 인식 시작
+                        console.log("[DEBUG] 마이크 권한이 이미 허용되었습니다. 음성 인식 시작.");
+                        startSpeechRecognition();
+                    } else if (permissionStatus.state === 'denied') {
+                        // 영구적으로 거부된 경우, 사용자에게 수동으로 허용하라고 안내
+                        console.error("[DEBUG] 마이크 권한이 영구적으로 거부되었습니다.");
+                        const instructions = [
+                            '1. 브라우저 주소창 왼쪽에 있는 **자물쇠** 또는 **마이크 아이콘**을 클릭합니다.',
+                            '2. 권한 설정 메뉴에서 **마이크** 항목을 찾아 **"허용"**으로 변경합니다.',
+                            '3. 이 페이지를 **새로고침**합니다.'
+                        ];
+                        showErrorModalWithList("마이크 접근이 거부되었습니다. 아래 단계를 따라 수동으로 권한을 허용해주세요.", instructions);
+                        speechStatusBar.classList.add('error-state');
+                    } else { // 'prompt' 상태일 때
+                        // 아직 요청하지 않았거나, 요청이 거부되지 않은 경우, getUserMedia를 호출하여 권한 요청 팝업을 띄웁니다.
+                        console.log("[DEBUG] 마이크 권한 요청 팝업을 표시합니다.");
+                        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                        console.log("[DEBUG] 마이크 권한 허용됨. 스트림 획득 성공.");
+                        
+                        // 권한이 허용되면 음성 인식을 시작합니다.
+                        startSpeechRecognition();
+                    }
                 } catch (error) {
                     console.error("[DEBUG] 마이크 권한 요청 실패:", error);
                     speechStatusBar.classList.add('error-state');
                     
-                    const instructions = [
-                        '1. 브라우저 주소창 왼쪽에 있는 **자물쇠** 또는 **마이크 아이콘**을 클릭합니다.',
-                        '2. 권한 설정 메뉴에서 **마이크** 항목을 찾아 **"허용"**으로 변경합니다.',
-                        '3. 이 페이지를 **새로고침**합니다.'
-                    ];
-                    
-                    if (error.name === 'NotAllowedError' || error.name === 'SecurityError') {
-                        showErrorModalWithList("마이크 접근이 거부되었습니다. 아래 단계를 따라 수동으로 권한을 허용해주세요.", instructions);
-                    } else if (error.name === 'NotFoundError') {
+                    if (error.name === 'NotFoundError') {
                         showErrorModal('마이크 장치를 찾을 수 없습니다. 장치가 올바르게 연결되어 있는지 확인해주세요.');
                     } else {
                         showErrorModal(`마이크 요청 오류가 발생했습니다: ${error.message}`);
