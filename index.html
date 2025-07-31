@@ -8,7 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         /* Inter 폰트 임포트 */
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;70s0&display=swap');
         
         html, body {
             height: 100vh;
@@ -352,7 +352,7 @@
             let recognition = null;
             let wakeWordDetected = false;
             let commandTimeout = null;
-            let isRecognitionActive = false;
+            let isRecognitionActive = false; // 음성 인식 상태를 추적하는 플래그
 
             const WAKE_WORD = '하이 빅스비';
             const SCROLL_UP_COMMANDS = [
@@ -441,7 +441,7 @@
                 clearTimeout(commandTimeout);
                 speechStatus.textContent = `음성 명령을 기다리는 중입니다. "${WAKE_WORD}"라고 또렷하게 말해주세요.`;
                 interimText.textContent = '';
-                interimText.classList.add('hidden');
+                interimText.classList.remove('hidden');
                 micIcon.classList.remove('mic-pulsing');
                 micIcon.style.opacity = '0.6';
                 speechStatusBar.classList.remove('listening-for-command', 'command-executed', 'error-state');
@@ -451,8 +451,6 @@
             // 음성 인식 시작 함수
             function startSpeechRecognition() {
                 if (!SpeechRecognition) {
-                    speechStatus.textContent = '죄송합니다. 이 브라우저는 음성 인식을 지원하지 않습니다.';
-                    console.warn('Web Speech API (SpeechRecognition) is not supported in this browser.');
                     showErrorModal('죄송합니다. 이 브라우저는 음성 인식을 지원하지 않습니다.');
                     return;
                 }
@@ -463,7 +461,6 @@
                     return;
                 }
                 
-                // SpeechRecognition 객체를 한 번만 생성
                 if (!recognition) {
                     recognition = new SpeechRecognition();
                     recognition.continuous = true; 
@@ -473,8 +470,7 @@
                 }
                 
                 isRecognitionActive = true;
-
-                // 이벤트 핸들러 설정
+                
                 recognition.onstart = () => {
                     micIcon.classList.add('mic-pulsing');
                     micIcon.style.opacity = '1';
@@ -486,6 +482,7 @@
                     wakeWordDetected = false;
                 };
 
+                // 음성 인식 결과 핸들러
                 recognition.onresult = (event) => {
                     let interimTranscript = '';
                     let finalTranscript = '';
@@ -499,11 +496,12 @@
                         }
                     }
 
-                    // 임시 음성 인식 결과를 실시간으로 표시
+                    // 실시간으로 인식 중인 텍스트 표시
                     if (interimTranscript) {
                         interimText.textContent = `인식 중: "${interimTranscript}"`;
                     }
-
+                    
+                    // 최종 인식 결과 처리
                     if (finalTranscript) {
                         interimText.textContent = `인식됨: "${finalTranscript}"`;
                         console.log("[DEBUG] 인식된 최종 음성:", finalTranscript);
@@ -513,6 +511,7 @@
 
                         if (!wakeWordDetected) {
                             const wakeWordNormalized = WAKE_WORD.toLowerCase().replace(/\s/g, '');
+                            // 웨이크 워드 포함 여부 확인
                             if (normalizedCommand.includes(wakeWordNormalized)) {
                                 wakeWordDetected = true;
                                 playSound();
@@ -575,12 +574,12 @@
                     }
                 };
 
+                // 음성 인식 중 오류 발생 시 핸들러
                 recognition.onerror = (event) => {
-                    isRecognitionActive = false;
-                    micIcon.classList.remove('mic-pulsing');
-                    micIcon.style.opacity = '0.6';
+                    console.error('[DEBUG] 음성 인식 오류:', event.error);
                     
                     if (event.error === 'not-allowed') {
+                        isRecognitionActive = false; // 영구적 오류이므로 재시작하지 않음
                         console.error('[DEBUG] 음성 인식 오류: 마이크 접근이 거부되었습니다.');
                         const instructions = [
                             '1. 브라우저 주소창 왼쪽에 있는 **자물쇠** 또는 **마이크 아이콘**을 클릭합니다.',
@@ -590,27 +589,36 @@
                         showErrorModalWithList("마이크 접근이 거부되었습니다. 아래 단계를 따라 수동으로 권한을 허용해주세요.", instructions);
                         speechStatusBar.classList.add('error-state');
                     } else if (event.error === 'network') {
-                         console.error('[DEBUG] 음성 인식 오류: 네트워크 오류가 발생했습니다.');
                          const errorMessage = `네트워크 오류가 발생했습니다. 인터넷 연결을 확인해주세요.`;
                          speechStatus.textContent = errorMessage;
                          showErrorModal(errorMessage);
-                    } else if (event.error === 'no-speech') {
-                         console.log("[DEBUG] (정상적인 동작) 음성 입력이 감지되지 않아 인식이 종료되었습니다. 1초 후 자동으로 재시작합니다.");
+                         // 이 경우, onend가 호출되므로 재시작 로직이 동작함
                     } else {
-                        console.error('[DEBUG] 음성 인식 오류:', event.error);
                         const errorMessage = `음성 인식 오류가 발생했습니다: ${event.error}`;
                         speechStatus.textContent = errorMessage;
                         showErrorModal(errorMessage);
+                        // 이 경우, onend가 호출되므로 재시작 로직이 동작함
                     }
-                    
-                    // 기존의 재시작 로직을 제거
-                    // onend 핸들러도 제거했기 때문에, 이제 재시작이 자동으로 일어나지 않음.
-                    // 오류 발생 시 사용자가 직접 새로고침하도록 유도하는 것이 더 안정적임.
                 };
                 
-                // onend 핸들러를 제거하여 불필요한 재시작을 방지
-                // recognition.onend = () => { ... }
-                
+                // 음성 인식이 종료될 때 핸들러 (재시작 로직)
+                recognition.onend = () => {
+                    console.log("[DEBUG] 음성 인식 종료됨.");
+                    // `isRecognitionActive`가 true일 때만 재시작
+                    // 'not-allowed'와 같은 치명적 오류가 아닌 경우에만 다시 시작
+                    if (isRecognitionActive) {
+                        console.log("[DEBUG] 자동 재시작...");
+                        // `setTimeout`을 사용하여 약간의 딜레이 후 재시작
+                        // 이렇게 하면 브라우저가 과도한 요청으로 인식하지 않음
+                        setTimeout(() => {
+                            recognition.start();
+                        }, 500); // 0.5초 후 재시작
+                    } else {
+                        console.log("[DEBUG] isRecognitionActive가 false이므로 재시작하지 않습니다. (치명적 오류)");
+                        resetWakeWordState();
+                    }
+                };
+
                 recognition.start();
                 console.log("[DEBUG] recognition.start() 호출됨.");
             }
@@ -629,6 +637,7 @@
                         startSpeechRecognition();
                     } else if (permissionStatus.state === 'denied') {
                         // 영구적으로 거부된 경우, 사용자에게 수동으로 허용하라고 안내
+                        isRecognitionActive = false;
                         console.error("[DEBUG] 마이크 권한이 영구적으로 거부되었습니다.");
                         const instructions = [
                             '1. 브라우저 주소창 왼쪽에 있는 **자물쇠** 또는 **마이크 아이콘**을 클릭합니다.',
@@ -655,6 +664,7 @@
                     } else {
                         showErrorModal(`마이크 요청 오류가 발생했습니다: ${error.message}`);
                     }
+                    isRecognitionActive = false;
                 }
             }
 
